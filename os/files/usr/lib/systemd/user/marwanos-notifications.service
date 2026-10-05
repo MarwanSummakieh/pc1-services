@@ -1,0 +1,11 @@
+[Unit]
+Description=MarwanOS system notification inbox
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.Notifications
+ExecStart=/usr/bin/python3 /usr/lib/marwanos/notifications/server.py
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
