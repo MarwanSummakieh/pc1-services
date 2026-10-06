@@ -20,12 +20,11 @@ Achievement ownership and player progress are separate integrations.
 
 ## Controller operation
 
-Select a library card and press **Down** to open details. **Play**, **Refresh metadata**,
-**Change metadata match**, and **Edit title** are focusable controller rows.
-Match correction opens the existing unmasked on-screen keyboard and presents
-candidate titles/IDs for selection. **Back** returns to the selected card.
-The existing Options removal flow is retained; managed apps also have a removal
-row in details with the existing confirmation.
+Select a library card and press **Down** to open details. **Play** is the only
+action button. **Back** returns to the selected card, and **L1/R1** scroll longer
+game information. The existing Options removal flow remains on the library card.
+Metadata refreshes automatically; backend correction requests remain supported,
+but the details page has no refresh, matching, title-editing or removal buttons.
 
 Details show title, description, release date, genres, developer/publisher,
 installation source, provider platform information and available cover/background/logo.
@@ -91,7 +90,8 @@ actual cache files, offline restart, failures/retry, manual corrections, changed
 matches, search and interrupted downloads. The complete Python suite passes with
 the OS runtime's dependencies plus the existing pefile/ordlookup test modules;
 two optional live service checks are skipped. All pinned Godot shell suites pass,
-including metadata controller refresh/search/Back and launch-identity preservation.
+including the Play-only details page, focus across metadata updates, Back and
+launch-identity preservation.
 
 Still pending: a real Tekken game launch, physical controller operation of the
 details screen, and an actual machine reboot/offline check. The cached-file and
