@@ -93,11 +93,18 @@ two optional live service checks are skipped. All pinned Godot shell suites pass
 including the Play-only details page, focus across metadata updates, Back and
 launch-identity preservation.
 
-Still pending: a real Tekken game launch, physical controller operation of the
-details screen, and an actual machine reboot/offline check. The cached-file and
-worker/shell restart checks do not substitute for those. The existing registration
-uses `input_mode=pointer`; game controller routing must be checked during gameplay
-acceptance. No game source files or registration commands were changed here.
+The real Tekken launch initially used the general Windows registration's pointer
+profile. This started the mouse/keyboard bridge and held the virtual gamepad
+neutral. The installed Tekken manifest was backed up and only `input_mode` was
+changed to the empty native-gamepad profile. The executable, prefix, installation
+ID and launch/stop commands are unchanged. Tekken was relaunched through the shell
+with user approval. Its foreground gamepad heartbeat is consistently enabled, and
+Wine has the virtual controller `/dev/input/event22` open. The DualSense remains
+connected to the broker; the pointer bridge no longer starts for Tekken.
+
+Still pending: physical in-game controller response, complete controller operation
+of the details screen, and an actual machine reboot/offline check. The routing,
+cached-file and worker/shell restart checks do not substitute for those.
 
 The earlier OS build for `d313bc05231d8d8b04e7e1407c4f90611a152bba` completed
 successfully and pushed its image during this work. It predates this metadata
