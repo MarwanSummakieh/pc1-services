@@ -110,8 +110,12 @@ relaunch. In-game controller input is verified on this installed game.
 Image-owned candidate reboots now preserve the metadata and all four artwork
 hashes. An image-owned offline worker run also passed with host networking left
 unchanged. The actual artwork/facts/history render fills the 3440×1440 output and
-keeps Play as the only action; separate-page navigation, refresh/correction
-requests and focus restoration pass the controller shell tests. See the dated
+keeps Play as the only action. On candidate five (`0be4ae6`), actual native
+gamescope captures confirmed the Details and separate Options → Metadata page.
+Its real Refresh action produced an observed request, fresh ready metadata and
+four verified artwork downloads; Back restored Play and the library card.
+The complete Windows manifest and 122.453-second single-session history stayed
+unchanged. Correction and failure recovery also pass the controller shell tests. See the dated
 [acceptance record](acceptance-20261006.md) for exact image identity and physical
 acceptance boundaries.
 
