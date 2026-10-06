@@ -46,6 +46,77 @@ class FakeBlueZ:
             success()
 
 
+class MissingBlueZ(Exception):
+    def __init__(self, name):
+        self.name = name
+
+    def get_dbus_name(self):
+        return self.name
+
+
+class BluetoothAvailabilityChecks(unittest.TestCase):
+    def test_hardware_condition_skipped_service_reports_no_adapter_then_hotplug(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hci = Path(directory) / "sys-bluetooth"
+            hci.mkdir()
+            backend = FakeBlueZ()
+            absent = True
+            def query():
+                if absent:
+                    raise MissingBlueZ("org.freedesktop.DBus.Error.ServiceUnknown")
+                return backend.data
+            backend.objects = lambda: bluetooth.managed_objects(query, hci)
+            manager = bluetooth.Manager(backend, Path(directory) / "status")
+            manager.tick()
+            status = json.loads((Path(directory) / "status/state.json").read_text())
+            self.assertEqual(status["status"], "no-adapter")
+            self.assertTrue(status["available"])
+            self.assertEqual(status["error"], "")
+            (hci / "hci0").mkdir()
+            manager.tick()
+            self.assertEqual(manager.state["status"], "unavailable")
+            self.assertIn("Bluetooth change failed", manager.error)
+            (hci / "hci0").rmdir()
+            manager.tick()
+            self.assertEqual(manager.state["status"], "no-adapter")
+            self.assertEqual(manager.error, "")
+            (hci / "hci0").mkdir()
+            absent = False
+            manager.tick()
+            self.assertEqual(manager.state["status"], "ready")
+            self.assertEqual(len(manager.state["adapters"]), 1)
+
+    def test_missing_owner_without_hardware_is_clean_but_other_errors_are_not_hidden(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ["org.freedesktop.DBus.Error.ServiceUnknown",
+                         "org.freedesktop.DBus.Error.NameHasNoOwner"]:
+                def query():
+                    raise MissingBlueZ(name)
+                self.assertEqual(bluetooth.managed_objects(query, directory), {})
+            for name in ["org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.NoReply"]:
+                def query():
+                    raise MissingBlueZ(name)
+                with self.assertRaises(MissingBlueZ):
+                    bluetooth.managed_objects(query, directory)
+
+    def test_missing_service_with_real_adapter_remains_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "hci0").mkdir()
+            for name in ["org.freedesktop.DBus.Error.ServiceUnknown",
+                         "org.freedesktop.DBus.Error.NameHasNoOwner"]:
+                def query():
+                    raise MissingBlueZ(name)
+                with self.assertRaises(MissingBlueZ):
+                    bluetooth.managed_objects(query, directory)
+
+    def test_successful_private_bus_adapter_is_not_filtered_by_host_hardware(self):
+        with tempfile.TemporaryDirectory() as directory:
+            backend = FakeBlueZ()
+            objects = bluetooth.managed_objects(backend.objects, directory)
+            self.assertEqual(bluetooth.snapshot(objects)["status"], "ready")
+            self.assertEqual(len(bluetooth.snapshot(objects)["adapters"]), 1)
+
+
 class BluetoothChecks(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()

@@ -23,6 +23,12 @@ It registers an application pairing agent, rather than becoming the machine's
 default pairing agent. A new or hotplugged adapter is powered on once; a user
 power-off selection is respected while the adapter remains attached.
 
+Before a dongle is attached, BlueZ may skip its hardware-conditioned system
+service. Missing-service/owner replies become the clean `no-adapter` state only
+when no kernel HCI device exists. Agent registration waits for an adapter, and
+normal pairing resumes after hotplug. Access failures and missing BlueZ with a
+real adapter remain visible errors.
+
 Requests and status are private atomic JSON files under
 `$XDG_RUNTIME_DIR/marwanos/bluetooth`. Targets must appear in BlueZ's current
 object graph, and request files cannot be symlinks. Device pairing information

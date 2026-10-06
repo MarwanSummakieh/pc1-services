@@ -16,6 +16,19 @@ class BluetoothError(Exception):
     pass
 
 
+def managed_objects(query, hci_root=Path("/sys/class/bluetooth")):
+    """A hardware-conditioned BlueZ service may correctly be absent before hotplug."""
+    try:
+        return query()
+    except Exception as exc:
+        error_name = getattr(exc, "get_dbus_name", lambda: "")()
+        absent = error_name in ("org.freedesktop.DBus.Error.ServiceUnknown",
+                                "org.freedesktop.DBus.Error.NameHasNoOwner")
+        if absent and not any(Path(hci_root).glob("hci*")):
+            return {}
+        raise
+
+
 def atomic_json(path, value):
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8") as stream:
@@ -66,7 +79,10 @@ class Manager:
         self.backend.call(target, interface, method, args, done, failed)
 
     def refresh(self):
+        was_unavailable = self.state["status"] == "unavailable"
         self.state = snapshot(self.backend.objects())
+        if was_unavailable:
+            self.error = ""
 
     def publish(self):
         self.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -272,8 +288,8 @@ def run():
             return dbus.Interface(bus.get_object("org.bluez", path), interface)
 
         def objects(self):
-            result = self.interface("/", "org.freedesktop.DBus.ObjectManager").GetManagedObjects(timeout=3)
-            if not self.registered:
+            result = managed_objects(lambda: self.interface("/", "org.freedesktop.DBus.ObjectManager").GetManagedObjects(timeout=3))
+            if not self.registered and any(ADAPTER in interfaces for interfaces in result.values()):
                 self.interface("/org/bluez", "org.bluez.AgentManager1").RegisterAgent("/org/marwanos/bluetooth_agent", "KeyboardDisplay", timeout=3)
                 self.registered = True
             return result
