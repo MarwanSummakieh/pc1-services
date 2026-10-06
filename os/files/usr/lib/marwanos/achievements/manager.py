@@ -3,6 +3,7 @@
 import argparse
 import configparser
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -13,6 +14,11 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+
+# The worker is also loaded by path by isolated regression/acceptance runners.
+_provider_spec = importlib.util.spec_from_file_location("pc1_achievement_providers", Path(__file__).with_name("providers.py"))
+_providers = importlib.util.module_from_spec(_provider_spec)
+_provider_spec.loader.exec_module(_providers)
 
 
 def read_json(path, default):
@@ -97,6 +103,8 @@ def schema_rows(value):
             "hidden": bool(row.get("hidden", False)),
             "icon_url": str(row.get("icon", "")),
             "locked_icon_url": str(row.get("icongray", row.get("icon_gray", "")))}
+        if "catalog_progress" in row:
+            result[str(row["name"])]["catalog_progress"] = _providers.catalog_progress(row["catalog_progress"])
     return result
 
 
@@ -144,6 +152,12 @@ class Steam:
 
     def schema(self, appid, key):
         return schema_rows(self.api("GetSchemaForGame", "v2", appid=appid, key=key, l="english"))
+
+    def schema_public(self, appid):
+        if not isinstance(appid, str) or not re.fullmatch(r"[1-9][0-9]{0,9}", appid) or int(appid) > 0xffffffff:
+            raise ValueError("Invalid achievement app ID")
+        url = "https://api.steampowered.com/IPlayerService/GetGameAchievements/v1/?" + urllib.parse.urlencode({"appid": appid, "language": "english"})
+        return _providers.public_schema_rows(json.loads(self.fetch(url)), appid)
 
     def state(self, appid, profile, key):
         response = self.api("GetPlayerAchievements", "v1", appid=appid, steamid=profile, key=key, l="english").get("playerstats", {})
@@ -223,27 +237,38 @@ class Manager:
             self.data = {"version": 1, "games": {}, "profiles": {}}
         self.data.setdefault("games", {})
         self.next_poll = {}
+        self.next_schema_poll = {}
         self.icon_budget = 4
 
     def publish(self):
         write_json(self.base / "state.json", self.data)
 
-    def load_schema(self, appid, entry):
+    def load_schema(self, appid, entry, force=False):
         path = self.base / "schemas" / (appid + ".json")
-        if path.is_file():
-            return schema_rows(read_json(path, {}))
         root = Path(entry.get("executable", "")).parent
-        for candidate in [root / "steam_settings/achievements.json", root / "Polaris/Binaries/Win64/steam_settings/achievements.json"]:
+        for candidate in [path, root / "steam_settings/achievements.json", root / "Polaris/Binaries/Win64/steam_settings/achievements.json"]:
             if candidate.is_file():
-                return schema_rows(read_json(candidate, {}))
+                try:
+                    rows = schema_rows(read_json(candidate, {}))
+                    if rows:
+                        return rows
+                except (ValueError, KeyError, TypeError):
+                    pass
+        if not force and self.next_schema_poll.get(appid, 0) > self.clock():
+            return {}
+        # A failed network catalog must not stall every local-save observation.
+        self.next_schema_poll[appid] = self.clock() + 300
         key = str(self.settings.get("api_key", ""))
-        if key:
+        sources = [lambda: self.steam.schema(appid, key)] if key else []
+        sources.append(lambda: self.steam.schema_public(appid))
+        for fetch in sources:
             try:
-                rows = self.steam.schema(appid, key)
-                write_json(path, {"achievements": [{**row, "name": row["id"], "displayName": row["name"], "icon": row.get("icon_url", ""), "icongray": row.get("locked_icon_url", "")} for row in rows.values()]})
-                return rows
+                rows = fetch()
+                if rows:
+                    write_json(path, {"achievements": [{**row, "name": row["id"], "displayName": row["name"], "icon": row.get("icon_url", ""), "icongray": row.get("locked_icon_url", "")} for row in rows.values()]})
+                    return rows
             except (OSError, ValueError, KeyError, TypeError):
-                return {}  # A failed schema fetch must not hide genuine local progress.
+                pass  # A failed schema fetch must not hide genuine local progress.
         return {}
 
     def cache_icon(self, url):
@@ -301,7 +326,7 @@ class Manager:
         try:
             if local:
                 states = local_state(local["path"])
-                schema = self.load_schema(appid, entry)
+                schema = self.load_schema(appid, entry, force)
                 schema_complete = bool(schema)
                 record["source_file"] = str(local["path"])
             elif provider == "Steam" and re.fullmatch(r"7656119\d{10}", profile) and appid:
@@ -310,11 +335,11 @@ class Manager:
                 api_key = str(self.settings.get("api_key", ""))
                 if api_key:
                     states = self.steam.state(appid, profile, api_key)
-                    schema = self.load_schema(appid, entry)
+                    schema = self.load_schema(appid, entry, force)
                     schema_complete = bool(schema)
                 else:
                     public_schema, states = self.steam.public(appid, profile)
-                    schema = self.load_schema(appid, entry)
+                    schema = self.load_schema(appid, entry, force)
                     schema_complete = bool(schema)
                     schema.update(public_schema)
             else:
