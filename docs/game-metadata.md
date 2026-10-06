@@ -102,9 +102,12 @@ with user approval. Its foreground gamepad heartbeat is consistently enabled, an
 Wine has the virtual controller `/dev/input/event22` open. The DualSense remains
 connected to the broker; the pointer bridge no longer starts for Tekken.
 
-Still pending: physical in-game controller response, complete controller operation
-of the details screen, and an actual machine reboot/offline check. The routing,
-cached-file and worker/shell restart checks do not substitute for those.
+The user confirmed that Tekken responds to the physical controller after the
+relaunch. In-game controller input is verified on this installed game.
+
+Still pending: complete controller operation of the details screen and an actual
+machine reboot/offline check. The routing, cached-file and worker/shell restart
+checks do not substitute for those.
 
 The earlier OS build for `d313bc05231d8d8b04e7e1407c4f90611a152bba` completed
 successfully and pushed its image during this work. It predates this metadata
