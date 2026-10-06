@@ -23,8 +23,10 @@ Achievement ownership and player progress are separate integrations.
 Select a library card and press **Down** to open details. **Play** is the only
 action button. **Back** returns to the selected card, and **L1/R1** scroll longer
 game information. The existing Options removal flow remains on the library card.
-Metadata refreshes automatically; backend correction requests remain supported,
-but the details page has no refresh, matching, title-editing or removal buttons.
+Metadata refreshes automatically. **Options → Metadata** opens a separate
+controller page for refreshing the current provider or choosing a named candidate
+when matching is ambiguous. **B** returns to Play. The details page itself keeps
+one Play action, with no editing or removal buttons.
 
 Details show title, description, release date, genres, developer/publisher,
 installation source, provider platform information and available cover/background/logo.
@@ -75,13 +77,13 @@ files confirmed the details layout. The supervised NVIDIA/gamescope shell then
 restarted on PC1 and loaded the Tekken entry with its metadata. A fresh worker
 invoked in an isolated network namespace successfully reused the persistent cache.
 
-The bench uses `/var/marwanos/dev-shell/marwanos-shell` with its matching
+The earlier bench used `/var/marwanos/dev-shell/marwanos-shell` with its matching
 `libmowser.so`, and the metadata helper under
-`/var/marwanos/metadata-bench-20261006/`. A player user-unit override enables the
+`/var/marwanos/metadata-bench-20261006/`. A player user-unit override enabled the
 helper. The pre-existing shell override, when present, was backed up under that
 directory's `backup/`. The OS Containerfile now enables the image-owned metadata
-unit. Remove the player unit override after installing an image with this worker
-to use the image-owned helper.
+unit. The candidate boot retired the bench flag, bind mounts and worker unit
+overrides; metadata now runs from the image-owned helper and unit.
 
 ## Validation boundaries
 
@@ -105,9 +107,21 @@ connected to the broker; the pointer bridge no longer starts for Tekken.
 The user confirmed that Tekken responds to the physical controller after the
 relaunch. In-game controller input is verified on this installed game.
 
-Still pending: complete controller operation of the details screen and an actual
-machine reboot/offline check. The routing, cached-file and worker/shell restart
-checks do not substitute for those.
+Image-owned candidate reboots now preserve the metadata and all four artwork
+hashes. An image-owned offline worker run also passed with host networking left
+unchanged. The actual artwork/facts/history render fills the 3440×1440 output and
+keeps Play as the only action; separate-page navigation, refresh/correction
+requests and focus restoration pass the controller shell tests. See the dated
+[acceptance record](acceptance-20261006.md) for exact image identity and physical
+acceptance boundaries.
+
+For this installed game, import and enrichment require no desktop session,
+manual artwork downloads or manual Steam match. That supplies the requested
+Playnite-style automatic presentation while preserving the Windows launch target.
+The current provider is Steam Store; broader provider/plugin coverage, rich
+library filters and title editing are outside this implementation. Human judgment
+of the physical display remains separate from the isolated render and controller
+regressions.
 
 The earlier OS build for `d313bc05231d8d8b04e7e1407c4f90611a152bba` completed
 successfully and pushed its image during this work. It predates this metadata
