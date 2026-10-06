@@ -22,6 +22,23 @@ spec.loader.exec_module(module)
 
 
 class InboxTests(unittest.TestCase):
+    def test_completed_download_payload_survives_notification_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'notifications.json'
+            inbox = module.Inbox(path)
+            download = {'path': '/var/home/player/Downloads/日本語 game', 'torrent': True,
+                        'untrusted_command': 'must not enter the shell handoff'}
+            inbox.notify('Downloads', 0, 'Download complete', 'Ready to install', download=download)
+            entry = module.Inbox(path).entries[0]
+            self.assertEqual(entry['app'], 'Downloads')
+            self.assertEqual(entry['download'], {'path': download['path'], 'torrent': True})
+            inbox.notify('Downloads', 0, 'Malformed handoff', 'body',
+                         download={'path': ['/tmp/game.exe'], 'torrent': True})
+            self.assertNotIn('download', module.Inbox(path).entries[-1])
+            inbox.notify('Downloads', 0, 'Regular file', 'body',
+                         download={'path': '/tmp/game.exe', 'torrent': 'true'})
+            self.assertFalse(module.Inbox(path).entries[-1]['download']['torrent'])
+
     def test_replace_close_restart_and_bounds(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'notifications.json'
@@ -76,6 +93,42 @@ class InboxTests(unittest.TestCase):
                 self.assertEqual(entries[1]['body'], 'alpha.bin')
                 self.assertTrue((spool / 'fdm-test.json.tmp').exists())
                 self.assertFalse((spool / 'fdm-test.json').exists())
+                # Exercise the same real user-bus server with new provider events,
+                # rather than testing an isolated dictionary transformation.
+                (spool / '00-invalid-shape.json').write_text('[]')
+                (spool / '00-invalid-app.json').write_text(json.dumps(
+                    {'app': {'command': 'invalid'}, 'summary': 'Malformed event', 'body': 'body'}))
+                (spool / 'achievement-test.json').write_text(json.dumps(
+                    {'app': 'Achievements', 'summary': 'Achievement unlocked: First step',
+                     'body': 'TEKKEN 8\n日本語 achievement'}))
+                download = {'path': '/var/home/player/Downloads/TEKKEN 8', 'torrent': True}
+                (spool / 'download-test.json').write_text(json.dumps(
+                    {'app': 'Downloads', 'summary': 'Download ready', 'body': 'Ready to install',
+                     'download': {**download, 'exec': 'never persisted'}}))
+                deadline = time.monotonic() + 5
+                pending = ['achievement-test.json', 'download-test.json',
+                           '00-invalid-shape.json', '00-invalid-app.json']
+                while (len(json.loads(state.read_text())['entries']) < 4 or
+                       any((spool / name).exists() for name in pending)):
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(.1)
+                received = {entry['summary']: entry for entry in json.loads(state.read_text())['entries']}
+                unlock = received['Achievement unlocked: First step']
+                self.assertEqual(unlock['app'], 'Achievements')
+                self.assertEqual(unlock['body'], 'TEKKEN 8\n日本語 achievement')
+                self.assertNotIn('download', unlock)
+                ready = received['Download ready']
+                self.assertEqual(ready['app'], 'Downloads')
+                self.assertEqual(ready['download'], download)
+                self.assertFalse((spool / 'achievement-test.json').exists())
+                self.assertFalse((spool / 'download-test.json').exists())
+                self.assertFalse((spool / '00-invalid-shape.json').exists())
+                self.assertFalse((spool / '00-invalid-app.json').exists())
+                self.assertNotIn('Malformed event', received,
+                                 'invalid event shapes must not block subsequent providers')
+                time.sleep(.6)
+                self.assertEqual(len(json.loads(state.read_text())['entries']), 4,
+                                 'consumed achievement/download events must not replay')
             finally:
                 process.terminate()
                 process.communicate(timeout=5)
