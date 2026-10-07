@@ -7,5 +7,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y python3-dbus python3-gi pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-daemon
+      - run: sudo apt-get update && sudo apt-get install -y python3-pil python3-dbus python3-gi pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-daemon
       - run: /usr/bin/python3 -m unittest discover -s tests -v

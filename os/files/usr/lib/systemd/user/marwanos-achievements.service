@@ -1,0 +1,13 @@
+[Unit]
+Description=PC1 persistent game achievements
+After=network.target marwanos-notifications.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/lib/marwanos/achievements/manager.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

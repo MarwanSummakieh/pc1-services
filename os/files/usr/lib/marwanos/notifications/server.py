@@ -29,7 +29,7 @@ class Inbox:
         temporary.chmod(0o600)
         temporary.replace(self.path)
 
-    def notify(self, app, replace_id, summary, body, urgency=1):
+    def notify(self, app, replace_id, summary, body, urgency=1, download=None):
         ident = int(replace_id)
         old = next((e for e in self.entries if e['id'] == ident and e['app'] == str(app)), None)
         if old is None:
@@ -40,6 +40,9 @@ class Inbox:
         self.entries.append({'id': ident, 'app': str(app)[:128],
                              'summary': str(summary)[:512], 'body': str(body)[:4096],
                              'urgency': int(urgency), 'time': int(time.time()), 'closed': False})
+        if isinstance(download, dict) and isinstance(download.get('path'), str):
+            self.entries[-1]['download'] = {'path': download['path'][:4096],
+                                            'torrent': download.get('torrent') is True}
         self.entries = self.entries[-50:]
         self.save()
         return ident
@@ -82,12 +85,17 @@ class Server(dbus.service.Object):
         pass
 
     def receive_fdm(self):
-        for path in sorted(self.spool.glob('fdm-*.json'))[:100]:
+        for path in sorted(self.spool.glob('*.json'))[:100]:
             try:
                 if path.is_symlink() or path.stat().st_size > 65536:
                     raise ValueError('Invalid event file')
                 event = json.loads(path.read_text())
-                self.inbox.notify('FDM Controller', 0, event['summary'], event['body'])
+                if (not isinstance(event, dict) or
+                        not all(isinstance(event.get(key, ''), str) for key in ('app', 'summary', 'body'))):
+                    raise ValueError('Invalid notification event')
+                self.inbox.notify(event.get('app', 'FDM Controller'), 0,
+                                  event['summary'], event['body'],
+                                  download=event.get('download'))
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 print(f'Cannot receive notification: {exc}', flush=True)
             finally:

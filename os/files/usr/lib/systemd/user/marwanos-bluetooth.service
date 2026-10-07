@@ -1,0 +1,13 @@
+[Unit]
+Description=MarwanOS Bluetooth controller pairing
+After=dbus.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/lib/marwanos/bluetooth/manager.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
