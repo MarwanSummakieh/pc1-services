@@ -1,8 +1,11 @@
 # Audio manager
 
-Open **Settings → Audio**, or press **Home → Audio** while an application is
-running. Audio in the Home menu leaves the application running and retains
-the shell's controller ownership until you return to it.
+Select **Audio** in the Home dock or running-app Home menu for a compact output
+volume slider above the button. Drag it, or use left / right to adjust by 5%.
+Cross toggles mute; Circle, PS/Home or clicking outside closes the slider and
+returns focus to Audio. The library or application stays visible.
+
+Open **Settings → Audio** for output devices, microphones and application volumes.
 
 | Control | Controller action |
 | --- | --- |

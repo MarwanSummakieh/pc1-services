@@ -1,0 +1,14 @@
+[Unit]
+Description=MarwanOS native downloads
+After=network.target marwanos-notifications.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/lib/marwanos/downloads/manager.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
