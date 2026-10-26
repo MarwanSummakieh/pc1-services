@@ -81,6 +81,32 @@ class ProfileSaveTests(unittest.TestCase):
         profiles.prepare_windows(self.prefix, ALICE)
         self.assertEqual(registry.read_text(), "Alice latest registry")
 
+    def test_setup_by_a_non_owner_keeps_its_saves_and_registry_with_that_player(self):
+        # setUp's prefix stands for one that ALICE's setup just populated.
+        self.select(ALICE)
+        profiles.claim_windows(self.prefix)
+        profiles.prepare_windows(self.prefix, BOB)  # A switch before ALICE's first launch.
+        self.assertFalse(self.save.exists())
+        profiles.prepare_windows(self.prefix, "owner")
+        self.assertFalse(self.save.exists())
+        profiles.prepare_windows(self.prefix, ALICE)
+        self.assertEqual(self.save.read_text(), "original progress")
+        self.assertEqual((self.prefix / "user.reg").read_text(), "original registry")
+
+    def test_claim_never_reassigns_an_existing_binding(self):
+        profiles.prepare_windows(self.prefix, "owner")
+        profiles.claim_windows(self.prefix, BOB)
+        profiles.prepare_windows(self.prefix, BOB)
+        self.assertFalse(self.save.exists())
+        profiles.prepare_windows(self.prefix, "owner")
+        self.assertEqual(self.save.read_text(), "original progress")
+
+    def test_unclaimed_existing_install_still_migrates_to_the_owner(self):
+        profiles.prepare_windows(self.prefix, ALICE)
+        self.assertFalse(self.save.exists())
+        profiles.prepare_windows(self.prefix, "owner")
+        self.assertEqual(self.save.read_text(), "original progress")
+
     def test_interrupted_legacy_migration_recovers_without_deleting_saves(self):
         profiles.prepare_windows(self.prefix, "owner")
         (self.prefix / "drive_c/users").unlink()  # Crash before link creation.

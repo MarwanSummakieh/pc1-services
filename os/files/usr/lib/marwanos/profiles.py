@@ -91,19 +91,22 @@ def write_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
-def bind_save(source, key, namespace, directory=True, legacy_key="owner"):
-    """Migrate legacy saves to owner, then atomically replace one save link.
+def binding_path(source):
+    digest = hashlib.sha256(str(Path(source).absolute()).encode()).hexdigest()
+    return digest, root() / "bindings" / (digest + ".json")
 
-    A crash between migration and linking leaves the original data in owner;
-    repeating the operation recovers it. Unknown links are never overwritten.
+
+def bind_save(source, key, namespace, directory=True, legacy_key="owner"):
+    """Migrate unlinked saves to their owner, then atomically replace one save link.
+
+    A crash between migration and linking leaves the original data with its
+    owner; repeating the operation recovers it. Unknown links are never
+    overwritten.
     """
     source = Path(source)
-    digest = hashlib.sha256(str(source.absolute()).encode()).hexdigest()
-    owner = data_home(legacy_key) / "saves" / namespace / digest
+    digest, binding = binding_path(source)
     destination = data_home(key) / "saves" / namespace / digest
-    owner.parent.mkdir(parents=True, exist_ok=True)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    binding = root() / "bindings" / (digest + ".json")
     if source.is_symlink():
         target = source.resolve()
         allowed = [data_home(row["id"]) / "saves" / namespace / digest
@@ -111,11 +114,15 @@ def bind_save(source, key, namespace, directory=True, legacy_key="owner"):
         if target not in allowed:
             raise ValueError("A save location points outside the profile store: " + str(source))
     elif source.exists():
-        # Wine commits user.reg by replacing the file, which can replace our
-        # symlink. The durable binding records who owns that new registry.
+        # The durable binding records who owns data written while this path
+        # was not linked: Wine replacing user.reg (which replaces our symlink),
+        # or setup run in a prefix claimed by the installing profile. With no
+        # binding, the data predates profiles and belongs to the legacy owner.
+        if binding.exists():
+            legacy_key = validate(json.loads(binding.read_text())["profile"])
+        owner = data_home(legacy_key) / "saves" / namespace / digest
+        owner.parent.mkdir(parents=True, exist_ok=True)
         if not directory and binding.exists():
-            previous = validate(json.loads(binding.read_text())["profile"])
-            owner = data_home(previous) / "saves" / namespace / digest
             source.replace(owner)
         elif owner.exists():
             raise ValueError("Both legacy and profile saves exist. Resolve the conflict before playing: " + str(source))
@@ -151,6 +158,23 @@ def prepare_windows(prefix, key=None):
     with lock():
         bind_save(prefix / "drive_c/users", key, "wine-users")
         bind_save(prefix / "user.reg", key, "wine-registry", directory=False)
+
+
+def claim_windows(prefix, key=None):
+    """Record the installing profile as owner of a new prefix's saves.
+
+    Setup writes the users tree and registry before any launch links them, so
+    the first launch must know who ran setup. Existing bindings are kept, and a
+    prefix without one (a pre-profile install) still migrates to the owner.
+    """
+    key = validate(key or active_id())
+    prefix = Path(prefix)
+    with lock():
+        for source in (prefix / "drive_c/users", prefix / "user.reg"):
+            _digest, binding = binding_path(source)
+            if not binding.exists():
+                binding.parent.mkdir(parents=True, exist_ok=True)
+                write_json(binding, {"profile": key})
 
 
 def prepare_installed_windows(key):
